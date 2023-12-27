@@ -1,6 +1,7 @@
 <template>
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
-    <!-- <div
+    <div
+      v-if="coins.isLoading"
       class="fixed w-100 h-100 opacity-80 bg-purple-800 inset-0 z-50 flex items-center justify-center"
     >
       <svg
@@ -23,7 +24,7 @@
           d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
         ></path>
       </svg>
-    </div> -->
+    </div>
     <div class="container">
       <section>
         <div class="flex">
@@ -33,6 +34,7 @@
             >
             <div class="mt-1 relative rounded-md shadow-md">
               <input
+                @input="handleChange"
                 @keydown.enter="add"
                 v-model="ticker"
                 type="text"
@@ -43,30 +45,19 @@
               />
             </div>
             <div
-              class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap"
+              v-if="coins.filtred?.length"
+              class="flex bg-white shadow-md p-1 rounded-md flex-wrap"
             >
               <span
+                @click="handleClick(coin.Symbol)"
+                v-for="coin in coins.filtred"
+                :key="coin.Id"
                 class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
               >
-                BTC
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                DOGE
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                BCH
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                CHD
+                {{ coin.Symbol }}
               </span>
             </div>
-            <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+            <div v-if="error" class="text-sm text-red-600">{{ error }}</div>
           </div>
         </div>
         <button
@@ -180,6 +171,8 @@
 </template>
 
 <script>
+import { API_KEY, API } from "./const";
+
 export default {
   name: "App",
   data() {
@@ -188,10 +181,23 @@ export default {
       tickers: [],
       sel: null,
       graph: [],
+      coins: {
+        isLoading: false,
+        data: [],
+        filtred: [],
+      },
+      error: null,
     };
   },
   methods: {
     add() {
+      if (
+        this.tickers.find(
+          (t) => t.name.toLowerCase() === this.ticker.toLowerCase()
+        )
+      ) {
+        return (this.error = "Такой тикер уже добавлен");
+      }
       const currentTicker = {
         name: this.ticker,
         price: "-",
@@ -199,7 +205,7 @@ export default {
       this.tickers.push(currentTicker);
       setInterval(async () => {
         const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=ba0dd305370a1749c4f4377f225cdaea8edad26779662f04163e01f58935f188`
+          `${API}/price?fsym=${currentTicker.name}&tsyms=USD&api_key=${API_KEY}`
         );
         const data = await f.json();
         this.tickers.find((t) => t.name === currentTicker.name).price =
@@ -211,6 +217,10 @@ export default {
       }, 3000);
       this.ticker = "";
     },
+    handleClick(tickerName) {
+      this.ticker = tickerName;
+      this.add();
+    },
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
     },
@@ -220,13 +230,33 @@ export default {
       const arr = this.graph.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue) || 5
       );
-      console.log(arr);
       return arr;
     },
     select(t) {
       this.sel = t;
       this.graph = [];
     },
+    handleChange() {
+      this.coins.filtred = this.coins.data
+        .filter(
+          (coin) =>
+            coin.FullName.toLowerCase().includes(this.ticker.toLowerCase()) ||
+            coin.Symbol.toLowerCase().includes(this.ticker.toLowerCase())
+        )
+        .slice(0, 3);
+      this.error = null;
+    },
+  },
+  mounted() {
+    this.coins.isLoading = true;
+    fetch(`${API}/all/coinlist?summary=true`)
+      .then((response) => response.json())
+      .then((response) => {
+        this.coins = {
+          isLoading: false,
+          data: Object.values(response.Data),
+        };
+      });
   },
 };
 </script>
